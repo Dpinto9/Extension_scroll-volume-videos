@@ -125,30 +125,52 @@ function setTwitchVolume(delta) {
 }
 
 function attachTwitch() {
-  const container = document.querySelector('.video-player__container');
+  const video = document.querySelector('video');
+  if (!video) return;
+
+  const container = video.closest('.video-player__container') ||
+                    video.closest('[data-a-target="video-player"]') ||
+                    video.parentElement;
+
   if (!container || processed.has(container)) return;
   processed.add(container);
 
+  let isHovering = false;
+
+  container.addEventListener('mouseenter', () => isHovering = true);
+  container.addEventListener('mouseleave', () => isHovering = false);
+
   const wheelHandler = (e) => {
-    // Check if scrolling over video area (not controls)
-    const target = e.target;
-    const isOverControls = target.closest('.player-controls') || 
-                          target.closest('[data-a-target="player-controls"]');
+    if (!isHovering) return;                    
+
+    // Ignore scrolls over the control bar
+    const overControls = e.target.closest('.player-controls') ||
+                         e.target.closest('[data-a-target="player-controls"]');
+    if (overControls) return;
+
+    const delta = e.deltaY > 0 ? -CONFIG.step : CONFIG.step;
+    const newVol = setTwitchVolume(delta);
     
-    // Only handle wheel if NOT over controls
-    if (!isOverControls) {
-      const delta = e.deltaY > 0 ? -CONFIG.step : CONFIG.step;
-      const newVol = setTwitchVolume(delta);
-      
-      if (newVol !== false) {
-        e.preventDefault();
-        e.stopPropagation();
-        showOverlay(container, newVol);
-      }
+    if (newVol !== false) {
+      e.preventDefault();
+      e.stopPropagation();
+      showOverlay(container, newVol);
     }
   };
 
   container.addEventListener("wheel", wheelHandler, { passive: false });
+
+  // Cleanup if the container disappears
+  const cleanupObserver = new MutationObserver(() => {
+    if (!document.contains(container)) {
+      container.removeEventListener('mouseenter', () => {});
+      container.removeEventListener('mouseleave', () => {});
+      container.removeEventListener('wheel', wheelHandler);
+      processed.delete(container);
+      cleanupObserver.disconnect();
+    }
+  });
+  cleanupObserver.observe(document.body, { childList: true, subtree: true });
 }
 
 function initTwitch() {
