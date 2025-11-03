@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Scroll Volume Control Enhanced",
-  "version": "3.2",
+  "version": "3.2.1",
   "description": "Control video volume with mouse wheel - YouTube, Twitch & more",
   "permissions": [],
   "host_permissions": [
@@ -14,7 +14,6 @@
       "matches": [
         "*://*.youtube.com/*",
         "*://*.twitch.tv/*",
-        "*://*.twitter.com/*",
         "*://*.x.com/*",
         "*://*.reddit.com/*",
         "*://*.instagram.com/*",
@@ -26,5 +25,9 @@
       "run_at": "document_end",
       "all_frames": true
     }
-  ]
+  ],
+  "web_accessible_resources": [{
+    "resources": ["*.js", "*.css"],
+    "matches": ["<all_urls>"]
+  }]
 }

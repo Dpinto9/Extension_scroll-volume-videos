@@ -5,7 +5,7 @@ const CONFIG = {
   scanInterval: 2000,
 };
 
-const processed = new WeakSet();
+let processed = new WeakSet();
 
 // ============================================
 // CORE FUNCTIONALITY
@@ -59,46 +59,125 @@ function showOverlay(container, volume) {
 // GENERAL VIDEO (YouTube, etc)
 // ============================================
 
-function syncYouTubeVolume(volume) {
-  const video = document.querySelector("video");
-  if (!video) return;
+function writeYTVolumePayload(volume) {
+  try {
+    const percent = Math.round(volume * 100);
+    const muted = percent === 0;
 
-  // 1. Atualiza o volume real do <video>
-  video.volume = volume;
-  if (volume > 0) video.muted = false;
+    const payload = {
+      data: JSON.stringify({ volume: percent, muted }),
+      expiration: Date.now() + 1000 * 60 * 60 * 24 * 30,
+      creation: Date.now(),
+    };
 
-  // 2. Encontra o painel de volume
-  const panel = document.querySelector(".ytp-volume-panel");
-  if (!panel) return;
+    const value = JSON.stringify(payload);
+    localStorage.setItem("yt-player-volume", value);
+    sessionStorage.setItem("yt-player-volume", value);
+  } catch (e) {}
+}
 
+function readYTVolumePayload() {
+  try {
+    const raw =
+      sessionStorage.getItem("yt-player-volume") ||
+      localStorage.getItem("yt-player-volume");
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    const inner = JSON.parse(parsed.data);
+    return (inner.volume || 0) / 100;
+  } catch (_) {
+    return null;
+  }
+}
+
+function updateYouTubeUI(volume) {
   const percent = Math.round(volume * 100);
 
-  // Atualiza atributos ARIA do painel (acessibilidade)
-  panel.setAttribute("aria-valuenow", percent);
-  panel.setAttribute("aria-valuetext", `${percent}% volume`);
+  // Update volume panel
+  const panel = document.querySelector(".ytp-volume-panel");
+  if (panel) {
+    panel.setAttribute("aria-valuenow", percent);
+    panel.setAttribute("aria-valuetext", percent + "% volume");
+  }
 
-  // 3. Atualiza a barra visual (CSS custom property)
-  const slider = panel.querySelector(".ytp-volume-slider");
+  // Update volume slider
+  const slider = panel?.querySelector(".ytp-volume-slider");
   if (slider) {
     slider.style.setProperty("--volume-slider-value", percent + "%");
     slider.setAttribute("aria-valuenow", percent);
     slider.setAttribute("aria-valuetext", percent + "%");
+
+    const handle = slider.querySelector(".ytp-volume-slider-handle");
+    if (handle) {
+      handle.style.left = (percent / 100) * 40 + "px";
+    }
   }
 
-  // 4. Move o "handle" (bolinha) visualmente
-  const handle = slider?.querySelector(".ytp-volume-slider-handle");
-  if (handle) {
-    const maxWidth = 40; // YouTube usa ~40px de largura total
-    handle.style.left = (percent / 100) * maxWidth + "px";
-  }
+  // Update mute icon
+  const muteSlash = document.querySelector("#ytp-id-16");
+  if (muteSlash) muteSlash.style.display = volume === 0 ? "block" : "none";
 
-  updateYouTubeVolumeIcon(volume);
+  const muteButton = document.querySelector(".ytp-mute-button");
+  if (muteButton) {
+    const isMuted = volume === 0;
+    muteButton.setAttribute(
+      "data-title-no-tooltip",
+      isMuted ? "Ativar som" : "Desativar som"
+    );
+    muteButton.setAttribute(
+      "aria-label",
+      isMuted ? "Ativar som (m)" : "Desativar som (m)"
+    );
+  }
+}
+
+function syncYouTubeVolume(volume) {
+  const video = document.querySelector("video");
+  if (!video) return;
+
+  // Apply volume to video element
+  video.volume = volume;
+  if (volume > 0) video.muted = false;
+
+  // Update UI elements
+  updateYouTubeUI(volume);
+
+  // Save to storage
+  writeYTVolumePayload(volume);
+}
+
+function autoApplyStoredVolume() {
+  const apply = () => {
+    const v = readYTVolumePayload();
+    if (v == null) return false;
+    const video = document.querySelector("video");
+    if (!video) return false;
+
+    // Apply volume and update UI
+    video.volume = v;
+    if (v > 0) video.muted = false;
+
+    // Update YouTube UI to match stored volume
+    updateYouTubeUI(v);
+
+    return true;
+  };
+
+  apply();
+
+  new MutationObserver(apply).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
 }
 
 function attachYouTube() {
   const video = document.querySelector("video");
   if (!video || processed.has(video)) return;
   processed.add(video);
+
+  autoApplyStoredVolume();
 
   video.addEventListener(
     "wheel",
@@ -129,29 +208,10 @@ function scanYouTube() {
   }
 }
 
-function updateYouTubeVolumeIcon(volume) {
-  const muteSlash = document.querySelector('#ytp-id-16');
-  if (!muteSlash) return;
-
-  // Se volume = 0 → mostra a linha de mute
-  // Se volume > 0 → esconde
-  muteSlash.style.display = (volume === 0) ? 'block' : 'none';
-
-  // Atualiza o botão de mute (tooltip e aria)
-  const muteButton = document.querySelector('.ytp-mute-button');
-  if (muteButton) {
-    const percent = Math.round(volume * 100);
-    const isMuted = volume === 0;
-    muteButton.setAttribute('data-title-no-tooltip', isMuted ? 'Ativar som' : 'Desativar som');
-    muteButton.setAttribute('aria-label', isMuted ? 'Ativar som (m)' : 'Desativar som (m)');
-  }
-}
-
 function initYouTube() {
   scanYouTube();
   setInterval(scanYouTube, CONFIG.scanInterval);
 
-  // Detecta troca de vídeo (navegação SPA)
   let lastUrl = location.href;
   new MutationObserver(() => {
     if (location.href !== lastUrl) {
@@ -259,7 +319,7 @@ function initTwitch() {
   });
 
   document.addEventListener("fullscreenchange", () => {
-    processed.clear();
+    processed = new WeakSet();
     setTimeout(attachTwitch, 500);
   });
 }
