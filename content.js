@@ -5,7 +5,7 @@ const CONFIG = {
   scanInterval: 2000,
 };
 
-let processed = new WeakSet();
+const processed = new WeakSet();
 
 // ============================================
 // CORE FUNCTIONALITY
@@ -225,6 +225,8 @@ function initYouTube() {
 // TWITCH
 // ============================================
 
+let processedTwitch = new WeakSet();
+
 function setTwitchVolume(delta) {
   const slider = document.querySelector(
     '[data-a-target="player-volume-slider"]'
@@ -235,16 +237,13 @@ function setTwitchVolume(delta) {
   const newVol = Math.max(0, Math.min(1, current + delta));
   const percent = Math.round(newVol * 100);
 
-  // Update hidden <input>
   slider.value = newVol;
   slider.setAttribute("aria-valuenow", percent);
   slider.setAttribute("aria-valuetext", percent + "%");
 
-  // Dispatch events
   slider.dispatchEvent(new Event("input", { bubbles: true }));
   slider.dispatchEvent(new Event("change", { bubbles: true }));
 
-  // Update visual progress bar (Twitch uses role="progressbar")
   const progress = slider
     .closest('[data-a-target="player-volume-slider-wrapper"]')
     ?.querySelector('[role="progressbar"]');
@@ -265,8 +264,8 @@ function attachTwitch() {
     video.closest('[data-a-target="video-player"]') ||
     video.parentElement;
 
-  if (!container || processed.has(container)) return;
-  processed.add(container);
+  if (!container || processedTwitch.has(container)) return;
+  processedTwitch.add(container);
 
   let isHovering = false;
 
@@ -298,10 +297,11 @@ function attachTwitch() {
       container.removeEventListener("mouseenter", () => {});
       container.removeEventListener("mouseleave", () => {});
       container.removeEventListener("wheel", wheelHandler);
-      processed.delete(container);
+      processedTwitch.delete(container);
       cleanupObserver.disconnect();
     }
   });
+
   cleanupObserver.observe(document.body, { childList: true, subtree: true });
 }
 
@@ -315,12 +315,6 @@ function initTwitch() {
   }).observe(document.body, {
     childList: true,
     subtree: true,
-    attributes: false,
-  });
-
-  document.addEventListener("fullscreenchange", () => {
-    processed = new WeakSet();
-    setTimeout(attachTwitch, 500);
   });
 }
 
