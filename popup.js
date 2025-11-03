@@ -1,65 +1,80 @@
-// ============================================
-// DEBUG MODE - Change this to false to disable debug messages
-// ============================================
-const DEBUG_MODE = false;
+const $ = (id) => document.getElementById(id);
 
-// ============================================
-// POPUP SCRIPT
-// ============================================
-const stepSlider = document.getElementById('volumeStep');
-const stepValue = document.getElementById('stepValue');
-const colorPicker = document.getElementById('overlayColor');
-const opacitySlider = document.getElementById('overlayOpacity');
-const opacityValue = document.getElementById('opacityValue');
-const previewOverlay = document.getElementById('previewOverlay');
-const savedIndicator = document.getElementById('savedIndicator');
-const debugInfo = document.getElementById('debugInfo');
+const els = {
+  toggle: $('toggle'),
+  reloadNotice: $('reloadNotice'),
+  volumeStep: $('volumeStep'),
+  stepValue: $('stepValue'),
+  overlayColor: $('overlayColor'),
+  textColor: $('textColor'),
+  overlayOpacity: $('overlayOpacity'),
+  opacityValue: $('opacityValue'),
+  previewOverlay: $('previewOverlay'),
+  previewIcon: $('previewOverlay').querySelector('.preview-icon svg'),
+  previewNumber: $('previewOverlay').querySelector('.preview-number'),
+  expandBtn: $('expandBtn'),
+  advanced: $('advanced'),
+  saved: $('saved')
+};
 
-// Debug function
-function debug(message) {
-  if (!DEBUG_MODE) return;
-  
-  console.log('[Popup]', message);
-  debugInfo.textContent = message;
-  debugInfo.classList.add('show');
-  setTimeout(() => debugInfo.classList.remove('show'), 3000);
-}
+let needsReload = false;
 
-// Hide debug info if debug mode is off
-if (!DEBUG_MODE && debugInfo) {
-  debugInfo.style.display = 'none';
-}
+// Load
+chrome.storage.local.get([
+  'volumeStep', 'overlayColor', 'textColor', 'overlayOpacity', 'extensionEnabled'
+], (data) => {
+  const step = data.volumeStep ?? 0.05;
+  const bg = data.overlayColor ?? '#000000';
+  const txt = data.textColor ?? '#ffffff';
+  const op = data.overlayOpacity ?? 0.3;
+  const enabled = data.extensionEnabled !== false;
 
-// Check if chrome.storage is available
-if (!chrome.storage) {
-  debug('ERROR: chrome.storage not available!');
-} else {
-  debug('chrome.storage is available');
-}
+  els.volumeStep.value = step * 100;
+  els.stepValue.textContent = Math.round(step * 100) + '%';
+  els.overlayColor.value = bg;
+  els.textColor.value = txt;
+  els.overlayOpacity.value = op * 100;
+  els.opacityValue.textContent = Math.round(op * 100) + '%';
 
-// Load saved settings
-function loadSettings() {
-  chrome.storage.local.get(['volumeStep', 'overlayColor', 'overlayOpacity'], (result) => {
-    if (chrome.runtime.lastError) {
-      debug('Error loading: ' + chrome.runtime.lastError.message);
-      return;
-    }
-    
-    debug('Loaded: ' + JSON.stringify(result));
-    
-    if (result.volumeStep !== undefined) {
-      stepSlider.value = result.volumeStep * 100;
-      stepValue.textContent = Math.round(result.volumeStep * 100) + '%';
-    }
-    if (result.overlayColor) {
-      colorPicker.value = result.overlayColor;
-    }
-    if (result.overlayOpacity !== undefined) {
-      opacitySlider.value = result.overlayOpacity * 100;
-      opacityValue.textContent = Math.round(result.overlayOpacity * 100) + '%';
-    }
+  els.toggle.classList.toggle('on', enabled);
+
+  updatePreview();
+
+  // Auto-hide reload notice if already reloaded
+  if (performance.navigation.type === 1) {
+    els.reloadNotice.classList.remove('show');
+  }
+});
+
+// Save
+function save() {
+  const settings = {
+    volumeStep: els.volumeStep.value / 100,
+    overlayColor: els.overlayColor.value,
+    textColor: els.textColor.value,
+    overlayOpacity: els.overlayOpacity.value / 100,
+    extensionEnabled: els.toggle.classList.contains('on')
+  };
+
+  chrome.storage.local.set(settings, () => {
+    showSaved();
+    if (needsReload) els.reloadNotice.classList.add('show');
     updatePreview();
   });
+}
+
+function showSaved() {
+  els.saved.classList.add('show');
+  setTimeout(() => els.saved.classList.remove('show'), 1800);
+}
+
+// Preview
+function updatePreview() {
+  const rgb = hexToRgb(els.overlayColor.value);
+  const bg = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${els.overlayOpacity.value / 100})`;
+  els.previewOverlay.style.background = bg;
+  els.previewIcon.style.color = els.textColor.value;
+  els.previewNumber.style.color = els.textColor.value;
 }
 
 function hexToRgb(hex) {
@@ -71,54 +86,37 @@ function hexToRgb(hex) {
   } : { r: 0, g: 0, b: 0 };
 }
 
-function updatePreview() {
-  const rgb = hexToRgb(colorPicker.value);
-  const opacity = opacitySlider.value / 100;
-  const bgColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`;
-  previewOverlay.style.background = bgColor;
-}
+// Events
+els.toggle.addEventListener('click', () => {
+  els.toggle.classList.toggle('on');
+  needsReload = true;
+  save();
+});
 
-function saveSettings() {
-  const settings = {
-    volumeStep: stepSlider.value / 100,
-    overlayColor: colorPicker.value,
-    overlayOpacity: opacitySlider.value / 100
-  };
+els.volumeStep.addEventListener('input', () => {
+  els.stepValue.textContent = els.volumeStep.value + '%';
+  save();
+});
 
-  chrome.storage.local.set(settings, () => {
-    if (chrome.runtime.lastError) {
-      debug('Error saving: ' + chrome.runtime.lastError.message);
-      return;
+els.overlayOpacity.addEventListener('input', () => {
+  els.opacityValue.textContent = els.overlayOpacity.value + '%';
+  save();
+});
+
+els.overlayColor.addEventListener('input', save);
+els.textColor.addEventListener('input', save);
+
+els.reloadNotice.addEventListener('click', () => {
+  chrome.tabs.query({active: true, currentWindow: true}, tabs => {
+    if (tabs[0]) {
+      chrome.tabs.reload(tabs[0].id);
+      els.reloadNotice.classList.remove('show');
     }
-    
-    debug('Saved: ' + JSON.stringify(settings));
-    
-    // Show saved indicator
-    savedIndicator.classList.add('show');
-    setTimeout(() => {
-      savedIndicator.classList.remove('show');
-    }, 2000);
   });
-}
-
-// Update step value display
-stepSlider.addEventListener('input', (e) => {
-  stepValue.textContent = e.target.value + '%';
-  saveSettings();
 });
 
-// Update opacity value display and preview
-opacitySlider.addEventListener('input', (e) => {
-  opacityValue.textContent = e.target.value + '%';
-  updatePreview();
-  saveSettings();
+els.expandBtn.addEventListener('click', () => {
+  els.advanced.classList.toggle('show');
+  const svg = els.expandBtn.querySelector('svg');
+  svg.style.transform = els.advanced.classList.contains('show') ? 'rotate(180deg)' : '';
 });
-
-// Update preview and save when color changes
-colorPicker.addEventListener('input', () => {
-  updatePreview();
-  saveSettings();
-});
-
-// Load settings on popup open
-loadSettings();

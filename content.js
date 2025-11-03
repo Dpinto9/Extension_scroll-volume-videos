@@ -12,6 +12,8 @@ const CONFIG = {
   scanInterval: 2000,
   overlayColor: "#000000",
   overlayOpacity: 0.3,
+  textColor: "#ffffff",
+  enabled: true,
 };
 
 const processed = new WeakSet();
@@ -27,7 +29,13 @@ function loadSettings() {
   }
 
   chrome.storage.local.get(
-    ["volumeStep", "overlayColor", "overlayOpacity"],
+    [
+      "volumeStep",
+      "overlayColor",
+      "overlayOpacity",
+      "textColor",
+      "extensionEnabled",
+    ],
     (result) => {
       if (chrome.runtime.lastError) {
         console.error(
@@ -37,22 +45,20 @@ function loadSettings() {
         return;
       }
 
-      // console.log("[Volume Scroll] Settings loaded:", result);
-
       if (result.volumeStep !== undefined) {
         CONFIG.step = result.volumeStep;
-        // // console.log("[Volume Scroll] Step updated to:", CONFIG.step);
       }
       if (result.overlayColor) {
         CONFIG.overlayColor = result.overlayColor;
-        // console.log("[Volume Scroll] Color updated to:", CONFIG.overlayColor);
+      }
+      if (result.textColor) {
+        CONFIG.textColor = result.textColor;
       }
       if (result.overlayOpacity !== undefined) {
         CONFIG.overlayOpacity = result.overlayOpacity;
-        // console.log(
-        //   "[Volume Scroll] Opacity updated to:",
-        //   CONFIG.overlayOpacity
-        // );
+      }
+      if (result.extensionEnabled !== undefined) {
+        CONFIG.enabled = result.extensionEnabled;
       }
     }
   );
@@ -61,25 +67,25 @@ function loadSettings() {
 // Listen for settings changes in real-time
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === "local") {
-    // console.log("[Volume Scroll] Settings changed:", changes);
-
     if (changes.volumeStep) {
       CONFIG.step = changes.volumeStep.newValue;
-      // console.log("[Volume Scroll] Step changed to:", CONFIG.step);
     }
     if (changes.overlayColor) {
       CONFIG.overlayColor = changes.overlayColor.newValue;
-      // console.log("[Volume Scroll] Color changed to:", CONFIG.overlayColor);
+    }
+    if (changes.textColor) {
+      CONFIG.textColor = changes.textColor.newValue;
     }
     if (changes.overlayOpacity) {
       CONFIG.overlayOpacity = changes.overlayOpacity.newValue;
-      // console.log("[Volume Scroll] Opacity changed to:", CONFIG.overlayOpacity);
+    }
+    if (changes.extensionEnabled) {
+      CONFIG.enabled = changes.extensionEnabled.newValue;
     }
   }
 });
 
 // Initialize settings
-// console.log("[Volume Scroll] Extension loaded, loading settings...");
 loadSettings();
 
 // ============================================
@@ -133,7 +139,7 @@ const VOLUME_SVG = {
   <path fill="currentColor" d="M21.3594 8.64062L19.9551 10.0449C21.2203 11.3102 22 13.0611 22 15C22 16.9389 21.2203 18.6898 19.9551 19.9551L21.3594 21.3594C22.9895 19.7292 24 17.4794 24 15C24 12.5206 22.9895 10.2708 21.3594 8.64062Z"/>
   <path fill="currentColor" d="M18.5508 11.4492L17.1445 12.8555C17.6726 13.395 18 14.1323 18 14.9551C18 15.8011 17.6544 16.5566 17.0996 17.0996L18.5059 18.5059C19.4255 17.5978 20 16.3413 20 14.9551C20 13.5917 19.4438 12.3536 18.5508 11.4492Z"/>
 </svg>
-  `
+  `,
 };
 
 const VOLUME_RANGES = [
@@ -156,7 +162,7 @@ function getVolumeSVG(volume) {
 }
 
 function showOverlay(container, volume) {
-  if (!container) return;
+  if (!container || !CONFIG.enabled) return;
 
   let overlay = container.querySelector(".scroll-volume-overlay");
 
@@ -176,19 +182,20 @@ function showOverlay(container, volume) {
 
     Object.assign(overlay.style, {
       position: "absolute",
-      left: "20px",
-      top: "20px",
-      borderRadius: "16px",
+      left: "0%",
+      top: "15%",
+      borderRadius: "0 6px 6px 0",
       background: bgColor,
       backdropFilter: "blur(20px) saturate(180%)",
       WebkitBackdropFilter: "blur(20px) saturate(180%)",
       border: "1px solid rgba(255, 255, 255, 0.18)",
-      boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.37)",
+      boxShadow: "0 8px 32px rgba(0, 0, 0, 0.37)",
       zIndex: "99999",
       pointerEvents: "none",
-      transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
+      transition:
+        "transform .45s cubic-bezier(0.33,1,0.68,1), opacity .45s ease",
       userSelect: "none",
-      transform: "translateY(-20px) scale(0.9)",
+      transform: "translateX(-60px) scale(0.9)",
       opacity: "0",
     });
 
@@ -196,32 +203,37 @@ function showOverlay(container, volume) {
     Object.assign(glassContainer.style, {
       display: "flex",
       alignItems: "center",
-      gap: "12px",
-      padding: "12px 16px",
+      gap: "10px",
+      padding: "8px 14px 8px 20px",
+      lineHeight: "1",
     });
 
     const icon = overlay.querySelector(".volume-icon");
     Object.assign(icon.style, {
-      width: "28px",
-      height: "28px",
-      filter: "drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4))",
-      color: "white",
+      width: "24px",
+      height: "24px",
+      filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.4))",
+      color: CONFIG.textColor,
       flexShrink: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
     });
 
     const number = overlay.querySelector(".volume-number");
     Object.assign(number.style, {
-      fontSize: "32px",
+      fontSize: "24px",
       fontWeight: "700",
       fontFamily:
         "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-      color: "transparent",
-      WebkitTextStroke: "2px rgba(255, 255, 255, 0.95)",
-      textStroke: "2px rgba(255, 255, 255, 0.95)",
-      letterSpacing: "-1px",
-      filter: "drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5))",
-      minWidth: "60px",
+      color: CONFIG.textColor,
+      letterSpacing: "-0.5px",
+      minWidth: "55px",
       textAlign: "right",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "flex-end",
+      lineHeight: "1",
     });
 
     if (getComputedStyle(container).position === "static") {
@@ -236,21 +248,21 @@ function showOverlay(container, volume) {
   }
 
   const percent = Math.round(volume * 100);
-  const iconElement = overlay.querySelector(".volume-icon");
-  const numberElement = overlay.querySelector(".volume-number");
-
-  iconElement.innerHTML = getVolumeSVG(volume);
-  numberElement.textContent = `${percent}%`;
+  overlay.querySelector(".volume-icon").innerHTML = getVolumeSVG(volume);
+  overlay.querySelector(".volume-number").textContent = `${percent}%`;
 
   overlay.style.opacity = "1";
-  overlay.style.transform = "translateY(0) scale(1)";
+  overlay.style.transform = "translateX(0) scale(1)";
+  overlay.style.transitionDuration = "0.45s";
 
   clearTimeout(overlay._timer);
   overlay._timer = setTimeout(() => {
-    overlay.style.opacity = "0";
-    overlay.style.transform = "translateY(-20px) scale(0.9)";
-    setTimeout(() => overlay.remove(), 300);
-  }, CONFIG.overlayDuration || 1400);
+    overlay.style.opacity = "1";
+    overlay.style.transform = "translateX(-100%) scale(0.9)";
+    overlay.style.transitionDuration = "0.45s";
+
+    setTimeout(() => overlay.remove(), 450);
+  }, CONFIG.overlayDuration || 1600);
 }
 
 // ============================================
@@ -361,6 +373,8 @@ function autoApplyStoredVolume() {
 }
 
 function attachYouTube() {
+  if (!CONFIG.enabled) return;
+
   const video = document.querySelector("video");
   if (!video || processed.has(video)) return;
   processed.add(video);
@@ -370,7 +384,7 @@ function attachYouTube() {
   video.addEventListener(
     "wheel",
     (e) => {
-      if (video.readyState === 0) return;
+      if (!CONFIG.enabled || video.readyState === 0) return;
 
       const delta = e.deltaY > 0 ? -CONFIG.step : CONFIG.step;
       const newVol = Math.max(0, Math.min(1, video.volume + delta));
@@ -390,6 +404,8 @@ function attachYouTube() {
 }
 
 function scanYouTube() {
+  if (!CONFIG.enabled) return;
+
   const video = document.querySelector("video");
   if (video && video.offsetParent && video.closest(".html5-video-player")) {
     attachYouTube();
@@ -444,6 +460,8 @@ function setTwitchVolume(delta) {
 }
 
 function attachTwitch() {
+  if (!CONFIG.enabled) return;
+
   const video = document.querySelector("video");
   if (!video) return;
 
@@ -461,7 +479,7 @@ function attachTwitch() {
   container.addEventListener("mouseleave", () => (isHovering = false));
 
   const wheelHandler = (e) => {
-    if (!isHovering) return;
+    if (!CONFIG.enabled || !isHovering) return;
 
     const overControls =
       e.target.closest(".player-controls") ||
@@ -507,75 +525,12 @@ function initTwitch() {
 }
 
 // ============================================
-// TWITTER/X
-// ============================================
-
-function attachTwitter(video) {
-  if (!video || processed.has(video)) return;
-  processed.add(video);
-
-  video.addEventListener(
-    "wheel",
-    (e) => {
-      if (video.readyState === 0) return;
-
-      const delta = e.deltaY > 0 ? -CONFIG.step : CONFIG.step;
-      const newVol = Math.max(0, Math.min(1, video.volume + delta));
-
-      video.volume = newVol;
-      if (newVol > 0 && video.muted) video.muted = false;
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      const container =
-        video.closest("[data-testid='videoPlayer']") ||
-        video.closest("[data-testid='videoComponent']") ||
-        video.parentElement;
-      showOverlay(container, newVol);
-    },
-    { passive: false }
-  );
-}
-
-function scanTwitter() {
-  const videos = document.querySelectorAll(
-    "[data-testid='videoPlayer'] video, [data-testid='videoComponent'] video"
-  );
-
-  if (videos.length === 0) {
-    document.querySelectorAll("video").forEach((v) => {
-      if (v.videoWidth > 0 && v.offsetParent !== null) attachTwitter(v);
-    });
-  } else {
-    videos.forEach((v) => {
-      if (v.offsetParent !== null) attachTwitter(v);
-    });
-  }
-}
-
-function initTwitter() {
-  const scanner = setInterval(scanTwitter, 1000);
-  setTimeout(() => clearInterval(scanner), 15000);
-
-  setInterval(scanTwitter, CONFIG.scanInterval);
-
-  let scrollTimeout;
-  window.addEventListener(
-    "scroll",
-    () => {
-      clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(scanTwitter, 500);
-    },
-    { passive: true }
-  );
-}
-
-// ============================================
 // GENERAL VIDEO
 // ============================================
 
 function scanGeneral() {
+  if (!CONFIG.enabled) return;
+
   document.querySelectorAll("video").forEach((v) => {
     if (v.offsetParent !== null && !v.closest(".html5-video-player")) {
       attachGeneral(v);
@@ -584,13 +539,13 @@ function scanGeneral() {
 }
 
 function attachGeneral(video) {
-  if (!video || processed.has(video)) return;
+  if (!video || processed.has(video) || !CONFIG.enabled) return;
   processed.add(video);
 
   video.addEventListener(
     "wheel",
     (e) => {
-      if (video.readyState === 0) return;
+      if (!CONFIG.enabled || video.readyState === 0) return;
 
       const delta = e.deltaY > 0 ? -CONFIG.step : CONFIG.step;
       const newVol = Math.max(0, Math.min(1, video.volume + delta));
@@ -619,8 +574,6 @@ if (hostname.includes("youtube.com")) {
   initYouTube();
 } else if (hostname.includes("twitch.tv")) {
   initTwitch();
-} else if (hostname.includes("twitter.com") || hostname.includes("x.com")) {
-  initTwitter();
 } else {
   setTimeout(() => {
     scanGeneral();

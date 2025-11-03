@@ -1,44 +1,35 @@
 // ============================================
-// DEBUG MODE - Change this to false to disable debug messages
+// Volume Scroll – Background Script
 // ============================================
-const DEBUG_MODE = false;
+const DEBUG = false;
+const CONFIG_KEY = 'volumeScrollConfig';
 
-// ============================================
-// Background script - Sets default values on installation
-// ============================================
+const DEFAULT_CONFIG = {
+  enabled: true,
+  volumeStep: 0.05,        // 5%
+  overlayColor: '#000000',
+  overlayOpacity: 0.3,
+  overlayDuration: 1600
+};
 
 chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === 'install') {
-    // First time installation - set default values
-    chrome.storage.local.set({
-      volumeStep: 0.05,        // 5% per scroll
-      overlayColor: '#000000',  // Black
-      overlayOpacity: 0.3       // 30% opacity
-    }, () => {
-      if (DEBUG_MODE) console.log('Volume Scroll Control: Default settings initialized');
+  if (details.reason === 'install' || details.reason === 'update') {
+    chrome.storage.sync.get([CONFIG_KEY], (data) => {
+      const config = { ...DEFAULT_CONFIG, ...(data[CONFIG_KEY] || {}) };
+      chrome.storage.sync.set({ [CONFIG_KEY]: config }, () => {
+        if (DEBUG) console.log('Volume Scroll: Config initialized', config);
+      });
     });
   }
-  
-  if (details.reason === 'update') {
-    // Extension updated - ensure all settings exist
-    chrome.storage.local.get(['volumeStep', 'overlayColor', 'overlayOpacity'], (result) => {
-      const updates = {};
-      
-      if (result.volumeStep === undefined) {
-        updates.volumeStep = 0.05;
-      }
-      if (result.overlayColor === undefined) {
-        updates.overlayColor = '#000000';
-      }
-      if (result.overlayOpacity === undefined) {
-        updates.overlayOpacity = 0.3;
-      }
-      
-      if (Object.keys(updates).length > 0) {
-        chrome.storage.local.set(updates, () => {
-          if (DEBUG_MODE) console.log('Volume Scroll Control: Missing settings added');
-        });
-      }
+});
+
+// Listen for reload requests from popup
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.action === 'reload') {
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => chrome.tabs.reload(tab.id));
     });
+    sendResponse({ status: 'reloading' });
   }
+  return true;
 });
