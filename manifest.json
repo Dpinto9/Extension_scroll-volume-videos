@@ -1,7 +1,7 @@
 {
-  "manifest_version": 3,
+  "manifest_version": 1,
   "name": "Volta - Scroll Volume Controller",
-  "version": "3.1",
+  "version": "1.0.0",
   "description": "Control videos volumes with your mouse wheel - YouTube, Twitch & more.",
   "permissions": [
     "storage"

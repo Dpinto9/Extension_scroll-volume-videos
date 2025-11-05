@@ -1,9 +1,4 @@
 // ============================================
-// DEBUG MODE - Change this to false to disable debug messages
-// ============================================
-const DEBUG_MODE = false;
-
-// ============================================
 // CONFIG
 // ============================================
 const CONFIG = {
@@ -17,6 +12,7 @@ const CONFIG = {
 };
 
 const processed = new WeakSet();
+const DEBUG_MODE = false;
 
 // ============================================
 // CHROME STORAGE - Load Settings
@@ -85,7 +81,6 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   }
 });
 
-// Initialize settings
 loadSettings();
 
 // ============================================
@@ -266,7 +261,7 @@ function showOverlay(container, volume) {
 }
 
 // ============================================
-// GENERAL VIDEO (YouTube, etc)
+// YOUTUBE
 // ============================================
 
 function writeYTVolumePayload(volume) {
