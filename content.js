@@ -470,7 +470,13 @@ function attachTwitch() {
 
   let isHovering = false;
 
-  container.addEventListener("mouseenter", () => (isHovering = true));
+  container.addEventListener("mouseenter", () => {
+    isHovering = true;
+
+    const overlay = container.querySelector('.extensions-video-overlay-size-container');
+    if (overlay) overlay.style.display = 'none';
+  });
+
   container.addEventListener("mouseleave", () => (isHovering = false));
 
   const wheelHandler = (e) => {

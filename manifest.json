@@ -1,7 +1,7 @@
 {
-  "manifest_version": 1,
+  "manifest_version": 3,
   "name": "Volta - Scroll Volume Controller",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "Control videos volumes with your mouse wheel - YouTube, Twitch & more.",
   "permissions": [
     "storage"
@@ -10,12 +10,7 @@
     "*://*.youtube.com/*",
     "*://*.twitch.tv/*",
     "*://*.x.com/*",
-    "*://*.twitter.com/*",
-    "*://*.reddit.com/*",
-    "*://*.instagram.com/*",
-    "*://*.facebook.com/*",
-    "*://*.vimeo.com/*",
-    "*://*.dailymotion.com/*"
+    "*://*.twitter.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -39,12 +34,7 @@
         "*://*.youtube.com/*",
         "*://*.twitch.tv/*",
         "*://*.x.com/*",
-        "*://*.twitter.com/*",
-        "*://*.reddit.com/*",
-        "*://*.instagram.com/*",
-        "*://*.facebook.com/*",
-        "*://*.vimeo.com/*",
-        "*://*.dailymotion.com/*"
+        "*://*.twitter.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_end",
