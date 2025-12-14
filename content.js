@@ -332,6 +332,12 @@ function updateYouTubeUI(volume) {
       isMuted ? "Ativar som (m)" : "Desativar som (m)"
     );
   }
+
+  // NEW: Hide overflow panel when it appears
+  const overflowPanel = document.querySelector(".ytp-overflow-panel");
+  if (overflowPanel && getComputedStyle(overflowPanel).display === "block") {
+    overflowPanel.style.display = "none";
+  }
 }
 
 function syncYouTubeVolume(volume) {
@@ -376,6 +382,29 @@ function attachYouTube() {
 
   autoApplyStoredVolume();
 
+  // NEW: Listen for 'm' key to sync mute state
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "m" || e.key === "M") {
+      setTimeout(() => {
+        const video = document.querySelector("video");
+        if (!video) return;
+        
+        const isMuted = video.muted || video.volume === 0;
+        const newVolume = isMuted ? 0 : video.volume;
+        
+        updateYouTubeUI(newVolume);
+        writeYTVolumePayload(newVolume);
+      }, 50);
+    }
+  });
+
+  // NEW: Watch for volume changes from YouTube controls
+  video.addEventListener("volumechange", () => {
+    const newVolume = video.muted ? 0 : video.volume;
+    updateYouTubeUI(newVolume);
+    writeYTVolumePayload(newVolume);
+  });
+
   video.addEventListener(
     "wheel",
     (e) => {
@@ -389,9 +418,17 @@ function attachYouTube() {
       e.preventDefault();
       e.stopPropagation();
 
-      const container =
-        video.closest(".html5-video-player") ||
-        document.querySelector(".ytd-watch-flexy");
+      // NEW: Get fullscreen container if in fullscreen
+      const fullscreenElement = 
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement;
+
+      const container = fullscreenElement && fullscreenElement.contains(video)
+        ? fullscreenElement
+        : (video.closest(".html5-video-player") || document.querySelector(".ytd-watch-flexy"));
+
       showOverlay(container || video.parentElement, newVol);
     },
     { passive: false }
@@ -473,8 +510,10 @@ function attachTwitch() {
   container.addEventListener("mouseenter", () => {
     isHovering = true;
 
-    const overlay = container.querySelector('.extensions-video-overlay-size-container');
-    if (overlay) overlay.style.display = 'none';
+    const overlay = container.querySelector(
+      ".extensions-video-overlay-size-container"
+    );
+    if (overlay) overlay.style.display = "none";
   });
 
   container.addEventListener("mouseleave", () => (isHovering = false));
@@ -526,62 +565,203 @@ function initTwitch() {
 }
 
 // ============================================
-// GENERAL VIDEO
+// GENERAL VIDEO (UNIVERSAL)
 // ============================================
+
+const processedGeneral = new WeakSet();
 
 function scanGeneral() {
   if (!CONFIG.enabled) return;
 
-  document.querySelectorAll("video").forEach((v) => {
-    if (v.offsetParent !== null && !v.closest(".html5-video-player")) {
-      attachGeneral(v);
+  const videos = document.querySelectorAll("video");
+  
+  videos.forEach((video) => {
+    // Check if video is visible and not already processed
+    const isVisible = video.offsetParent !== null || 
+                     getComputedStyle(video).display !== 'none';
+    
+    if (isVisible && !processedGeneral.has(video)) {
+      // Skip YouTube and Twitch videos (handled separately)
+      if (video.closest('.html5-video-player') || 
+          video.closest('[data-a-target="video-player"]')) {
+        return;
+      }
+      attachGeneral(video);
     }
   });
 }
 
 function attachGeneral(video) {
-  if (!video || processed.has(video) || !CONFIG.enabled) return;
-  processed.add(video);
+  if (!video || processedGeneral.has(video) || !CONFIG.enabled) return;
 
-  video.addEventListener(
-    "wheel",
-    (e) => {
-      if (!CONFIG.enabled || video.readyState === 0) return;
+  processedGeneral.add(video);
 
-      const delta = e.deltaY > 0 ? -CONFIG.step : CONFIG.step;
-      const newVol = Math.max(0, Math.min(1, video.volume + delta));
+  // Find best container for the video
+  const getContainer = () => {
+    // Reddit-specific selectors
+    if (window.location.hostname.includes('reddit.com')) {
+      const redditContainer = video.closest('shreddit-player') || 
+                             video.closest('[slot="video-container"]') ||
+                             video.closest('div[style*="position"]');
+      if (redditContainer) return redditContainer;
+    }
 
-      video.volume = newVol;
-      if (newVol > 0 && video.muted) video.muted = false;
+    // Try common video player containers
+    const playerSelectors = [
+      '[class*="player"]',
+      '[class*="video"]',
+      '[class*="Player"]',
+      '[class*="Video"]',
+      '[id*="player"]',
+      '[id*="video"]',
+      'div[role="region"]',
+      'section',
+      'article'
+    ];
 
-      e.preventDefault();
-      e.stopPropagation();
+    for (const selector of playerSelectors) {
+      const container = video.closest(selector);
+      if (container && container !== document.body) {
+        return container;
+      }
+    }
 
-      const container =
-        video.closest(".html5-video-player") || video.parentElement;
-      showOverlay(container, newVol);
-    },
-    { passive: false }
-  );
+    // Fallback to parent with specific positioning
+    let parent = video.parentElement;
+    while (parent && parent !== document.body) {
+      const style = getComputedStyle(parent);
+      if (style.position === 'relative' || style.position === 'absolute') {
+        return parent;
+      }
+      parent = parent.parentElement;
+    }
+
+    return video.parentElement;
+  };
+
+  const container = getContainer();
+  if (!container) return;
+
+  let isHovering = false;
+
+  const mouseEnterHandler = () => {
+    isHovering = true;
+  };
+
+  const mouseLeaveHandler = () => {
+    isHovering = false;
+  };
+
+  container.addEventListener("mouseenter", mouseEnterHandler);
+  container.addEventListener("mouseleave", mouseLeaveHandler);
+
+    const wheelHandler = (e) => {
+    if (!CONFIG.enabled || !isHovering || video.readyState === 0) return;
+
+    const isOverControls = e.target.closest('[class*="control"]') || 
+                          e.target.closest('[class*="Control"]') ||
+                          e.target.closest('button');
+    if (isOverControls) return;
+
+    const delta = e.deltaY > 0 ? -CONFIG.step : CONFIG.step;
+    const newVol = Math.max(0, Math.min(1, video.volume + delta));
+
+    video.volume = newVol;
+    if (newVol > 0 && video.muted) {
+      video.muted = false;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Use video element as container for better positioning
+    const overlayContainer = video.parentElement;
+    showOverlay(overlayContainer, newVol);
+  };
+
+  // Attach to both video and container for better coverage
+  video.addEventListener("wheel", wheelHandler, { passive: false, capture: true });
+  container.addEventListener("wheel", wheelHandler, { passive: false });
+
+  // Position-based fallback for iframes and overlays
+  const documentWheelHandler = (e) => {
+    if (!CONFIG.enabled || !isHovering) return;
+
+    const videoRect = video.getBoundingClientRect();
+    const isOverVideo = 
+      e.clientX >= videoRect.left &&
+      e.clientX <= videoRect.right &&
+      e.clientY >= videoRect.top &&
+      e.clientY <= videoRect.bottom;
+
+    if (!isOverVideo) return;
+
+    const isOverControls = e.target.closest('[class*="control"]') || 
+                          e.target.closest('[class*="Control"]') ||
+                          e.target.closest('button');
+    if (isOverControls) return;
+
+    const delta = e.deltaY > 0 ? -CONFIG.step : CONFIG.step;
+    const newVol = Math.max(0, Math.min(1, video.volume + delta));
+
+    video.volume = newVol;
+    if (newVol > 0 && video.muted) {
+      video.muted = false;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    showOverlay(container, newVol);
+  };
+
+  document.addEventListener("wheel", documentWheelHandler, { passive: false, capture: true });
+
+  // Cleanup when video is removed from DOM
+  const cleanupObserver = new MutationObserver(() => {
+    if (!document.contains(video)) {
+      container.removeEventListener("mouseenter", mouseEnterHandler);
+      container.removeEventListener("mouseleave", mouseLeaveHandler);
+      video.removeEventListener("wheel", wheelHandler);
+      container.removeEventListener("wheel", wheelHandler);
+      document.removeEventListener("wheel", documentWheelHandler, { capture: true });
+      processedGeneral.delete(video);
+      cleanupObserver.disconnect();
+    }
+  });
+
+  cleanupObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
 }
 
 // ============================================
 // INITIALIZATION
 // ============================================
 
-const hostname = window.location.hostname;
+function initialize() {
+  const hostname = window.location.hostname;
 
-if (hostname.includes("youtube.com")) {
-  initYouTube();
-} else if (hostname.includes("twitch.tv")) {
-  initTwitch();
+  if (hostname.includes("youtube.com")) {
+    initYouTube();
+  } else if (hostname.includes("twitch.tv")) {
+    initTwitch();
+  } else {
+    setTimeout(() => {
+      scanGeneral();
+      setInterval(scanGeneral, CONFIG.scanInterval);
+    }, 500);
+
+    const observer = new MutationObserver(() => {
+      clearTimeout(scanGeneral._debounce);
+      scanGeneral._debounce = setTimeout(scanGeneral, 500);
+    });
+    
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initialize);
 } else {
-  setTimeout(() => {
-    scanGeneral();
-    setInterval(scanGeneral, CONFIG.scanInterval);
-  }, 500);
-  new MutationObserver(() => {
-    clearTimeout(scanGeneral._debounce);
-    scanGeneral._debounce = setTimeout(scanGeneral, 500);
-  }).observe(document.body, { childList: true, subtree: true });
+  initialize();
 }
