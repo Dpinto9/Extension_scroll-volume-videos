@@ -418,16 +418,9 @@ function attachYouTube() {
       e.preventDefault();
       e.stopPropagation();
 
-      // NEW: Get fullscreen container if in fullscreen
-      const fullscreenElement = 
-        document.fullscreenElement ||
-        document.webkitFullscreenElement ||
-        document.mozFullScreenElement ||
-        document.msFullscreenElement;
-
-      const container = fullscreenElement && fullscreenElement.contains(video)
-        ? fullscreenElement
-        : (video.closest(".html5-video-player") || document.querySelector(".ytd-watch-flexy"));
+      const container =
+      video.closest(".html5-video-player") ||
+      document.querySelector(".ytd-watch-flexy");
 
       showOverlay(container || video.parentElement, newVol);
     },
