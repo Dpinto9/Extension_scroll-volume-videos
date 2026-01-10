@@ -14,11 +14,11 @@ Control video volume with your mouse wheel. Works on YouTube, Twitch, and Netfli
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshot1.png" alt="Volta popup settings" width="600">
+  <img src="docs/1.png" alt="Volta popup settings" width="600">
 </p>
 
 <p align="center">
-  <img src="docs/screenshot2.png" alt="Volume overlay in action" width="600">
+  <img src="docs/2.png" alt="Volume overlay in action" width="600">
 </p>
 
 ## What it does
